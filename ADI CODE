@@ -1,0 +1,152 @@
+const int BUTTON_PINS[3] = {D0, D1, D2};
+const int LED_PINS[3] = {D3, D4, D5};
+const int MAX_SEQUENCE_LENGTH = 32;
+int sequence[MAX_SEQUENCE_LENGTH];
+int roundLength = 1;
+const unsigned long DEBOUNCE_MS = 30;
+const unsigned long INPUT_TIMEOUT_MS = 5000;
+const int LED_ON_TIME_MS = 420;
+const int LED_OFF_TIME_MS = 180;
+const int BETWEEN_ROUNDS_MS = 700;
+bool buttonStableState[3] = {HIGH, HIGH, HIGH};
+bool buttonReadingState[3] = {HIGH, HIGH, HIGH};
+unsigned long lastDebounceTime[3] = {0, 0, 0};
+void setAllLedsLow() {
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(LED_PINS[i], LOW);
+  }
+}
+void lightLed(int index, int durationMs) {
+  setAllLedsLow();
+  digitalWrite(LED_PINS[index], HIGH);
+  delay(durationMs);
+  digitalWrite(LED_PINS[index], LOW);
+}
+void startupAnimation() {
+  for (int i = 0; i < 3; i++) {
+    lightLed(i, 120);
+    delay(60);
+  }
+  for (int i = 2; i >= 0; i--) {
+    lightLed(i, 120);
+    delay(60);
+  }
+}
+void winAnimation() {
+  for (int repeat = 0; repeat < 3; repeat++) {
+    for (int i = 0; i < 3; i++) {
+      digitalWrite(LED_PINS[i], HIGH);
+    }
+    delay(180);
+    setAllLedsLow();
+    delay(120);
+  }
+}
+void loseAnimation() {
+  for (int repeat = 0; repeat < 3; repeat++) {
+    for (int i = 0; i < 3; i++) {
+      digitalWrite(LED_PINS[i], HIGH);
+      delay(100);
+      digitalWrite(LED_PINS[i], LOW);
+    }
+    delay(80);
+  }
+}
+void showSequence() {
+  Serial.print("Round ");
+  Serial.print(roundLength);
+  Serial.println(": watch the pattern");
+  delay(500);
+  for (int i = 0; i < roundLength; i++) {
+    lightLed(sequence[i], LED_ON_TIME_MS);
+    delay(LED_OFF_TIME_MS);
+  }
+  setAllLedsLow();
+}
+void resetGame() {
+  roundLength = 1;
+  for (int i = 0; i < MAX_SEQUENCE_LENGTH; i++) {
+    sequence[i] = random(0, 3);
+  }
+  Serial.println();
+  Serial.println("New Simon game started.");
+}
+int readButtonPress(unsigned long timeoutMs) {
+  unsigned long startedAt = millis();
+  while (millis() - startedAt < timeoutMs) {
+    unsigned long now = millis();
+    for (int i = 0; i < 3; i++) {
+      bool rawReading = digitalRead(BUTTON_PINS[i]);
+      if (rawReading != buttonReadingState[i]) {
+        buttonReadingState[i] = rawReading;
+        lastDebounceTime[i] = now;
+      }
+      if ((now - lastDebounceTime[i]) > DEBOUNCE_MS && buttonStableState[i] != buttonReadingState[i]) {
+        buttonStableState[i] = buttonReadingState[i];
+        if (buttonStableState[i] == LOW) {
+          digitalWrite(LED_PINS[i], HIGH);
+          while (digitalRead(BUTTON_PINS[i]) == LOW) {
+            delay(1);
+          }
+          digitalWrite(LED_PINS[i], LOW);
+          delay(20);
+          return i;
+        }
+      }
+    }
+  }
+  return -1;
+}
+bool playerTurn() {
+  Serial.println("Your turn.");
+  for (int i = 0; i < roundLength; i++) {
+    int pressed = readButtonPress(INPUT_TIMEOUT_MS);
+    if (pressed < 0) {
+      Serial.println("Timed out waiting for input.");
+      return false;
+    }
+    Serial.print("Pressed button ");
+    Serial.println(pressed + 1);
+    if (pressed != sequence[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+void setup() {
+  for (int i = 0; i < 3; i++) {
+    pinMode(BUTTON_PINS[i], INPUT_PULLUP);
+    pinMode(LED_PINS[i], OUTPUT);
+  }
+  setAllLedsLow();
+  Serial.begin(115200);
+  delay(400);
+  randomSeed(micros());
+  Serial.println("Simon Says ready.");
+  Serial.println("Buttons: D0, D1, D2");
+  Serial.println("LEDs: D3, D4, D5");
+  Serial.println("Press any game button to begin.");
+  startupAnimation();
+  resetGame();
+}
+void loop() {
+  showSequence();
+  if (playerTurn()) {
+    Serial.println("Correct!");
+    winAnimation();
+    if (roundLength < MAX_SEQUENCE_LENGTH) {
+      roundLength++;
+      delay(BETWEEN_ROUNDS_MS);
+    } else {
+      Serial.println("You beat the full sequence!");
+      winAnimation();
+      resetGame();
+      delay(1000);
+    }
+  } else {
+    Serial.println("Wrong button. Restarting game.");
+    loseAnimation();
+    resetGame();
+    delay(1000);
+  }
+}
