@@ -1,3 +1,4 @@
+[Untitled spreadsheet - Sheet1.pdf](https://github.com/user-attachments/files/27326972/Untitled.spreadsheet.-.Sheet1.pdf)
 # JacksFirstPCB
 JacksFirstPCB
 This is a simon says game I made using a PCB. It has buttons and LEDs and you repeat the pattern like the normal game.
